@@ -1,0 +1,6 @@
+@BackTeam7_HostAddress = http://localhost:5038
+
+GET {{BackTeam7_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

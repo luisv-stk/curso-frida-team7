@@ -1,3 +1,4 @@
+using AutoMapper;
 using BackTeam7.Models;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;
@@ -11,16 +12,18 @@ namespace processImageApp.controller
     public class ProcessImageController : ControllerBase
     {
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;        
+        private readonly IConfiguration _configuration;
+        private readonly IMapper _mapper;
         private const string FridaCompletionsUrl = "https://frida-llm-api.azurewebsites.net/v1/chat/completions";
 
         public ProcessImageController(
             IHttpClientFactory httpClientFactory, 
-            IConfiguration configuration
-            )
+            IConfiguration configuration,
+            IMapper mapper)
         {
             _httpClientFactory = httpClientFactory;
-            _configuration = configuration;            
+            _configuration = configuration;
+            _mapper = mapper;
         }
 
         // POST api/imagenprocess/complete-image        
@@ -32,6 +35,9 @@ namespace processImageApp.controller
                 return BadRequest("Request body is required.");
             }
 
+            // Map Image to Completion using AutoMapper
+            var completion = _mapper.Map<Completion>(payload);
+
             var client = _httpClientFactory.CreateClient();            
             
             var apiKey = _configuration["Frida:ApiKey"] ?? Environment.GetEnvironmentVariable("FRIDA_API_KEY");
@@ -42,12 +48,12 @@ namespace processImageApp.controller
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             }
 
-            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+            // Serialize the Completion object instead of the Image
+            var json = JsonSerializer.Serialize(completion, new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             });
-                        
             
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 

@@ -36,15 +36,15 @@ img.img-thumbnail {
 }
 
 .drop-area:hover {
-  background-color: rgba(255, 17, 242, 0.1);
+  background-color: #3d2b4d !important;
   border-color: #ff75f8 !important;
 }
 
 .drop-area.drag-over {
-  background-color: rgba(255, 17, 242, 0.2);
+  background-color: #4d3b5d !important;
   border-color: #ff75f8 !important;
+  transform: scale(1.02);
   border-style: solid !important;
-  transform: scale(1.01);
   box-shadow: 0 0 30px rgba(255, 17, 242, 0.4);
   border-width: 4px !important;
 }
@@ -56,11 +56,11 @@ img.img-thumbnail {
 
 /* Image Preview Cards */
 .card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 .card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-5px);
   box-shadow: 0 4px 15px rgba(255, 17, 242, 0.3);
 }
 

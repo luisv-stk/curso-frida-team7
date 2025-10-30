@@ -2,10 +2,11 @@ import { Component, ViewEncapsulation, ElementRef, ViewChild } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ImageData } from './models/image-data.model';
+import { ImageService, ClaudeResponse } from './services/image';
+import { HttpClientModule } from '@angular/common/http';
 
-// Define la clase CategoryImage
 class CategoryImage {
   category: string;
   images: string[];
@@ -19,10 +20,11 @@ class CategoryImage {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, DragDropModule],
+  imports: [CommonModule, FormsModule, MatIconModule, DragDropModule, HttpClientModule],
   templateUrl: './app.html',
   styleUrls: ['./app.css'],
-  encapsulation: ViewEncapsulation.None
+  encapsulation: ViewEncapsulation.None,
+  providers: [ImageService]
 })
 export class App {
   @ViewChild('fileInput', { static: false }) fileInput!: ElementRef<HTMLInputElement>;
@@ -37,16 +39,15 @@ export class App {
     { category: 'Animals', images: ['img/Rectangle 18.png'] },
   ];
 
-  // Properties for drag and drop functionality
   uploadedImages: (ImageData & { category?: string; previewUrl: string; selected?: boolean })[] = [];
   isDragOver = false;
-  categories = ['Architecture', 'Food'];
+  categories = ['Architecture', 'Food', 'Nature', 'Technology', 'People', 'Animals'];
   selectedCategory = '';
   isSelectAllMode = false;
   selectedImageCount = 0;
   isUploading = false;
 
-  constructor() {}
+  constructor(private imageService: ImageService) {}
 
   getCategoryImages(): CategoryImage[] {
     return [
@@ -55,7 +56,6 @@ export class App {
     ];
   }
 
-  // Drag and drop event handlers
   onDragOver(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
@@ -79,7 +79,6 @@ export class App {
     }
   }
 
-  // Click to select files
   onDropAreaClick(): void {
     this.fileInput.nativeElement.click();
   }
@@ -91,54 +90,129 @@ export class App {
     }
   }
 
-  // Process uploaded files
   private handleFiles(files: File[]): void {
     this.isUploading = true;
 
     const filePromises = Array.from(files).map(file => {
-      return new Promise<void>((resolve) => {
+      return new Promise<ImageData>((resolve, reject) => {
         if (file.type.startsWith('image/')) {
           const reader = new FileReader();
           reader.onload = (e) => {
             const base64 = e.target?.result as string;
-            const imageData: ImageData & { category?: string; previewUrl: string; selected?: boolean } = {
+            const imageData: ImageData = {
               filename: file.name,
               base64: base64,
               size: file.size,
-              type: file.type,
-              category: this.selectedCategory || undefined,
-              previewUrl: base64,
-              selected: false
+              type: file.type
             };
-            this.uploadedImages.push(imageData);
-            resolve();
+            resolve(imageData);
           };
+          reader.onerror = reject;
           reader.readAsDataURL(file);
         } else {
-          resolve();
+          reject(new Error('Not an image file'));
         }
       });
     });
 
-    Promise.all(filePromises).then(() => {
-      this.isUploading = false;
-      this.updateSelectedCount();
+    Promise.all(filePromises)
+      .then(images => {
+        // Agregar imágenes a la lista de forma local primero (para preview inmediato)
+        images.forEach(imageData => {
+          const extendedImage = {
+            ...imageData,
+            category: this.selectedCategory || undefined,
+            previewUrl: imageData.base64,
+            selected: false
+          };
+          this.uploadedImages.push(extendedImage);
+        });
+
+        // Enviar a la API para clasificación automática
+        return this.classifyImagesWithAI(images);
+      })
+      .then(() => {
+        this.isUploading = false;
+        this.updateSelectedCount();
+        console.log('✅ ¡Proceso completado exitosamente!');
+      })
+      .catch(error => {
+        console.error('Error processing images:', error);
+        this.isUploading = false;
+      });
+  }
+
+  private classifyImagesWithAI(images: ImageData[]): Promise<void> {
+    const prompt = `Clasifica esta imagen en UNA de las siguientes categorías: Architecture, Food.
+
+IMPORTANTE: Responde SOLO con el nombre EXACTO de la categoría, sin puntos, sin explicaciones, sin texto adicional.
+
+Ejemplos de respuestas correctas:
+- Food
+- Architecture`;
+
+    console.log('🚀 Iniciando clasificación de', images.length, 'imágenes...');
+
+    return new Promise((resolve, reject) => {
+      this.imageService.processMultipleImages(images, prompt).subscribe({
+        next: (responses: ClaudeResponse[]) => {
+          console.log('✅ Respuestas recibidas:', responses.length);
+
+          responses.forEach((response: ClaudeResponse, index: number) => {
+            if (response.content && response.content.length > 0) {
+              let categoryRaw = response.content[0].text.trim();
+
+              // Limpiar la respuesta
+              categoryRaw = categoryRaw.replace(/[.,!?;:]/g, ''); // Remover puntuación
+              categoryRaw = categoryRaw.split('\n')[0]; // Tomar solo la primera línea
+              categoryRaw = categoryRaw.split(' ')[0]; // Tomar solo la primera palabra
+
+              const category = categoryRaw.charAt(0).toUpperCase() + categoryRaw.slice(1).toLowerCase();
+
+              console.log(`📸 Imagen ${index + 1}: "${images[index].filename}"`);
+              console.log(`   Respuesta raw: "${response.content[0].text}"`);
+              console.log(`   Categoría limpia: "${category}"`);
+
+              // Buscar la imagen cargada y asignarle la categoría
+              const uploadedImage = this.uploadedImages.find(
+                img => img.filename === images[index].filename
+              );
+
+              if (uploadedImage) {
+                if (this.categories.includes(category)) {
+                  uploadedImage.category = category;
+                  console.log(`   ✓ Categoría "${category}" asignada correctamente`);
+                } else {
+                  console.warn(`   ⚠️ Categoría "${category}" no válida`);
+                  console.warn(`   Categorías válidas:`, this.categories);
+                  uploadedImage.category = undefined;
+                }
+              }
+            }
+          });
+
+          console.log('✅ Clasificación completada exitosamente');
+          resolve();
+        },
+        error: (error: any) => {
+          console.error('❌ Error al clasificar imágenes:', error);
+          resolve(); // Continuar aunque falle la clasificación
+        }
+      });
     });
   }
 
-  // Remove uploaded image
   removeImage(index: number): void {
     this.uploadedImages.splice(index, 1);
+    this.updateSelectedCount();
   }
 
-  // Category management
   assignCategory(imageIndex: number, category: string): void {
     if (this.uploadedImages[imageIndex]) {
       this.uploadedImages[imageIndex].category = category;
     }
   }
 
-  // Bulk operations
   selectAllImages(): void {
     const shouldSelectAll = !this.isSelectAllMode;
     this.uploadedImages.forEach(image => {
@@ -158,6 +232,7 @@ export class App {
     this.uploadedImages = this.uploadedImages.filter(image => !image.selected);
     this.selectedImageCount = 0;
     this.isSelectAllMode = false;
+    this.updateSelectedCount();
   }
 
   categorizeSelectedImages(category: string): void {
@@ -178,7 +253,6 @@ export class App {
     });
   }
 
-  // Individual image selection
   toggleImageSelection(index: number): void {
     this.uploadedImages[index].selected = !this.uploadedImages[index].selected;
     this.updateSelectedCount();
@@ -202,7 +276,6 @@ export class App {
     }
   }
 
-  // Enhanced category operations
   moveSelectedToCategory(category: string): void {
     this.uploadedImages.forEach(image => {
       if (image.selected) {
@@ -222,12 +295,10 @@ export class App {
     this.isSelectAllMode = false;
   }
 
-  // Get selected images
   getSelectedImages(): (ImageData & { category?: string; previewUrl: string; selected?: boolean })[] {
     return this.uploadedImages.filter(image => image.selected);
   }
 
-  // Download functionality for selected images
   downloadSelectedImages(): void {
     const selectedImages = this.getSelectedImages();
     selectedImages.forEach(image => {
@@ -238,7 +309,6 @@ export class App {
     });
   }
 
-  // Batch size validation
   getTotalFileSize(): number {
     return this.uploadedImages.reduce((total, image) => total + image.size, 0);
   }
@@ -255,12 +325,10 @@ export class App {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // Get images by category
   getImagesByCategory(category: string): (ImageData & { category?: string; previewUrl: string })[] {
     return this.uploadedImages.filter(image => image.category === category);
   }
 
-  // Get uncategorized images
   getUncategorizedImages(): (ImageData & { category?: string; previewUrl: string })[] {
     return this.uploadedImages.filter(image => !image.category);
   }

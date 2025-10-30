@@ -34,209 +34,99 @@
         <label for="categorySelect" class="form-label" style="color: #ff75f8;">Seleccionar categoría para nuevas imágenes:</label>
         <select id="categorySelect" class="form-select" [(ngModel)]="selectedCategory" style="max-width: 300px; background-color: #2d1b3d; color: white; border-color: #ff11f2;">
           <option value="">Sin categoría</option>
-          <option *ngFor="let category of categories" [value]="category">{{ category }}</option>
+          <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
         </select>
       </div>
 
       <!-- Drop Area -->
       <div
-        class="drop-area d-flex justify-content-center align-items-center text-center position-relative"
+        class="drop-area d-flex flex-column justify-content-center align-items-center text-center position-relative mb-4"
         [class.drag-over]="isDragOver"
-        [class.uploading]="isUploading"
         (dragover)="onDragOver($event)"
         (dragleave)="onDragLeave($event)"
         (drop)="onDrop($event)"
         (click)="onDropAreaClick()"
-        style="height: 300px; border: 3px dashed #ff11f2; border-radius: 15px; cursor: pointer; transition: all 0.3s ease;">
+        style="border: 2px dashed #ff11f2; border-radius: 10px; min-height: 200px; cursor: pointer; background-color: #2d1b3d;">
 
-        <!-- Loading Overlay -->
-        <div *ngIf="isUploading" class="loading-overlay d-flex flex-column align-items-center justify-content-center">
-          <div class="spinner-border text-primary mb-3" role="status" style="color: #ff11f2 !important;">
-            <span class="visually-hidden">Cargando...</span>
-          </div>
-          <p style="color: #ff75f8; font-size: 1.1rem;">Procesando imágenes...</p>
+        <input
+          #fileInput
+          type="file"
+          multiple
+          accept="image/*"
+          style="display: none;"
+          (change)="onFileSelected($event)">
+
+        <mat-icon style="font-size: 48px; height: 48px; width: 48px; color: #ff11f2;">cloud_upload</mat-icon>
+        <p class="mb-0 mt-3" style="color: #ff75f8;">Arrastra varias imágenes aquí</p>
+        <p class="mb-0" style="color: #ff75f8;">(o haz clic para seleccionar)</p>
+      </div>
+
+      <!-- Upload Button -->
+      <div class="text-center mb-4">
+        <button
+          class="btn btn-primary"
+          (click)="onDropAreaClick()"
+          [disabled]="isUploading"
+          style="background-color: #ff11f2; border-color: #ff11f2; padding: 10px 40px;">
+          <mat-icon *ngIf="!isUploading" style="vertical-align: middle;">add_photo_alternate</mat-icon>
+          <span *ngIf="isUploading" class="spinner-border spinner-border-sm me-2"></span>
+          {{ isUploading ? 'Subiendo...' : 'Subir Imágenes' }}
+        </button>
+      </div>
+
+      <!-- Uploaded Images Grid -->
+      <div *ngIf="uploadedImages.length > 0" class="mt-4">
+        <h5 style="color: #ff75f8;">Imágenes Subidas ({{ uploadedImages.length }})</h5>
+
+        <!-- Bulk Actions -->
+        <div class="d-flex gap-2 mb-3">
+          <button class="btn btn-sm btn-outline-light" (click)="selectAllImages()">
+            {{ isSelectAllMode ? 'Deseleccionar Todo' : 'Seleccionar Todo' }}
+          </button>
+          <button class="btn btn-sm btn-outline-danger" (click)="deleteSelectedImages()" [disabled]="selectedImageCount === 0">
+            Eliminar Seleccionadas ({{ selectedImageCount }})
+          </button>
         </div>
 
-        <!-- Drag Over Feedback -->
-        <div *ngIf="isDragOver && !isUploading" class="position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center"
-             style="background-color: rgba(255, 17, 242, 0.15); border-radius: 15px; z-index: 5;">
-          <mat-icon style="font-size: 5rem; height: 5rem; width: 5rem; color: #ff11f2;">cloud_upload</mat-icon>
-          <h3 style="color: #ff75f8; margin-top: 1rem;">¡Suelta las imágenes aquí!</h3>
-          <p style="color: #ff75f8;">Se procesarán automáticamente</p>
-        </div>
-
-        <div *ngIf="uploadedImages.length === 0 && !isDragOver && !isUploading">
-          <mat-icon style="font-size: 4rem; height: 4rem; width: 4rem; color: #ff11f2; margin-bottom: 1rem;">add_photo_alternate</mat-icon>
-          <h1 class="text-lowercase" style="color: #ff11f2; font-size: 2.5rem;">+</h1>
-          <p class="mb-0" style="color: #ff75f8; font-size: 1.2rem;">
-            Arrastra varias imágenes<br>(o selecciona una carpeta)
-          </p>
-          <p class="mt-2" style="color: #ff75f8; font-size: 0.9rem;">
-            Formatos soportados: JPG, PNG, GIF, WebP
-          </p>
-          <div class="mt-3">
-            <button class="btn btn-outline-light btn-sm" (click)="$event.stopPropagation(); onDropAreaClick();">
-              <mat-icon>folder_open</mat-icon> Seleccionar archivos
-            </button>
-          </div>
-        </div>
-
-        <!-- Image Previews -->
-        <div *ngIf="uploadedImages.length > 0" class="w-100">
-          <h5 style="color: #ff75f8; margin-bottom: 20px;">Imágenes subidas ({{ uploadedImages.length }})</h5>
-
-          <!-- Selection Status -->
-          <div class="mb-2 text-center" *ngIf="selectedImageCount > 0">
-            <small style="color: #ff75f8;">{{ selectedImageCount }} imagen(es) seleccionada(s) - {{ formatFileSize(getSelectedFileSize()) }}</small>
-          </div>
-
-          <!-- Bulk Actions -->
-          <div class="mb-3 d-flex flex-wrap gap-2 justify-content-center">
-            <!-- Selection Controls -->
-            <button class="btn btn-outline-light btn-sm" (click)="selectAllImages(); $event.stopPropagation();">
-              <mat-icon>{{ isSelectAllMode ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
-              {{ isSelectAllMode ? 'Deseleccionar todo' : 'Seleccionar todo' }}
-            </button>
-
-            <!-- Delete Actions -->
-            <button class="btn btn-outline-danger btn-sm" (click)="deleteAllImages(); $event.stopPropagation();">
-              <mat-icon>delete_sweep</mat-icon> Eliminar todas
-            </button>
-
-            <button *ngIf="selectedImageCount > 0" class="btn btn-danger btn-sm"
-                    (click)="deleteSelectedImages(); $event.stopPropagation();">
-              <mat-icon>delete</mat-icon> Eliminar seleccionadas ({{ selectedImageCount }})
-            </button>
-
-            <!-- Category Actions -->
-            <select *ngIf="selectedImageCount > 0" class="form-select form-select-sm"
-                    style="width: auto; background-color: #2d1b3d; color: white; border-color: #ff11f2;"
-                    (change)="moveSelectedToCategory($any($event.target).value); $event.stopPropagation();">
-              <option value="">Mover seleccionadas a...</option>
-              <option *ngFor="let category of categories" [value]="category">{{ category }}</option>
-            </select>
-
-            <select class="form-select form-select-sm" style="width: auto; background-color: #2d1b3d; color: white; border-color: #ff11f2;"
-                    (change)="categorizeUncategorizedImages($any($event.target).value); $event.stopPropagation();">
-              <option value="">Categorizar sin categoría</option>
-              <option *ngFor="let category of categories" [value]="category">{{ category }}</option>
-            </select>
-
-            <!-- Download Actions -->
-            <button *ngIf="selectedImageCount > 0" class="btn btn-outline-success btn-sm"
-                    (click)="downloadSelectedImages(); $event.stopPropagation();">
-              <mat-icon>download</mat-icon> Descargar seleccionadas
-            </button>
-
-            <!-- Clear Selection -->
-            <button *ngIf="selectedImageCount > 0" class="btn btn-outline-warning btn-sm"
-                    (click)="clearAllSelections(); $event.stopPropagation();">
-              <mat-icon>clear</mat-icon> Limpiar selección
-            </button>
-          </div>
-
-          <!-- Total Size Info -->
-          <div class="mb-3 text-center">
-            <small style="color: #ccc;">
-              Total: {{ uploadedImages.length }} imagen(es) - {{ formatFileSize(getTotalFileSize()) }}
-            </small>
-          </div>
-
-          <!-- Image Grid -->
-          <div class="row g-3">
-            <div *ngFor="let image of uploadedImages; let i = index" class="col-md-4 col-sm-6">
-              <div class="card bg-dark border-secondary position-relative"
-                   [class.border-primary]="image.selected"
-                   style="border-color: #ff11f2 !important; transition: all 0.2s ease;"
-                   [style.border-width]="image.selected ? '3px' : '1px'"
-                   [style.box-shadow]="image.selected ? '0 0 15px rgba(255, 17, 242, 0.5)' : 'none'">
-
-                <!-- Selection Checkbox -->
-                <div class="position-absolute top-0 start-0 m-2" style="z-index: 10;">
-                  <button class="btn btn-sm p-1"
-                          [style.background-color]="image.selected ? '#ff11f2' : 'rgba(0,0,0,0.7)'"
-                          [style.color]="image.selected ? 'white' : '#ff75f8'"
-                          (click)="toggleImageSelection(i); $event.stopPropagation();">
-                    <mat-icon style="font-size: 18px;">
-                      {{ image.selected ? 'check_box' : 'check_box_outline_blank' }}
-                    </mat-icon>
-                  </button>
-                </div>
-
-                <img [src]="image.previewUrl" class="card-img-top"
-                     style="height: 150px; object-fit: cover;"
-                     [alt]="image.filename"
-                     (click)="toggleImageSelection(i); $event.stopPropagation();"
-                     [style.cursor]="'pointer'">
-
-                <!-- Delete Button -->
-                <button class="btn btn-danger btn-sm position-absolute top-0 end-0 m-2"
-                        (click)="removeImage(i); $event.stopPropagation();"
-                        style="z-index: 10;">
-                  <mat-icon style="font-size: 16px;">close</mat-icon>
-                </button>
-
-                <div class="card-body p-2">
-                  <p class="card-text text-truncate mb-1" style="color: #ff75f8; font-size: 0.8rem;">
-                    {{ image.filename }}
-                  </p>
-                  <p class="card-text mb-2" style="color: #ccc; font-size: 0.7rem;">
-                    {{ (image.size / 1024).toFixed(1) }} KB
-                  </p>
-
-                  <!-- Category Assignment -->
-                  <select class="form-select form-select-sm"
-                          [value]="image.category || ''"
-                          (change)="assignCategory(i, $any($event.target).value); $event.stopPropagation();"
-                          style="background-color: #2d1b3d; color: white; border-color: #ff11f2; font-size: 0.75rem;">
-                    <option value="">Sin categoría</option>
-                    <option *ngFor="let category of categories" [value]="category">{{ category }}</option>
-                  </select>
-
-                  <div *ngIf="image.category" class="mt-1">
-                    <span class="badge"
-                          style="background-color: #ff11f2; color: white; font-size: 0.6rem;">
-                      {{ image.category }}
-                    </span>
-                  </div>
+        <!-- Images Grid -->
+        <div class="row g-3">
+          <div *ngFor="let image of uploadedImages; let i = index" class="col-md-3">
+            <div class="card" style="background-color: #2d1b3d; border-color: #ff11f2;">
+              <div class="position-relative">
+                <img [src]="image.previewUrl" class="card-img-top" style="height: 150px; object-fit: cover;" [alt]="image.filename">
+                <div class="position-absolute top-0 end-0 p-2">
+                  <input
+                    type="checkbox"
+                    [checked]="image.selected"
+                    (change)="toggleImageSelection(i)"
+                    class="form-check-input">
                 </div>
               </div>
+              <div class="card-body p-2">
+                <p class="card-text small text-truncate mb-1" style="color: white;">{{ image.filename }}</p>
+                <p class="card-text small mb-1" style="color: #ff75f8;">{{ formatFileSize(image.size) }}</p>
+                <select
+                  class="form-select form-select-sm mt-2"
+                  [(ngModel)]="image.category"
+                  style="background-color: #190421; color: white; border-color: #ff11f2;">
+                  <option value="">Sin categoría</option>
+                  <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+                </select>
+                <button class="btn btn-sm btn-danger w-100 mt-2" (click)="removeImage(i)">
+                  Eliminar
+                </button>
+              </div>
             </div>
-          </div>
-
-          <!-- Add More Images Button -->
-          <div class="text-center mt-3">
-            <p style="color: #ff75f8;">Arrastra más imágenes aquí o haz clic para seleccionar</p>
           </div>
         </div>
       </div>
 
-      <!-- Hidden File Input -->
-      <input
-        #fileInput
-        type="file"
-        multiple
-        accept="image/*"
-        style="display: none;"
-        (change)="onFileSelected($event)">
-
-      <!-- Categories Summary -->
-      <div *ngIf="uploadedImages.length > 0" class="mt-4">
-        <h6 style="color: #ff75f8;">Resumen por categorías:</h6>
-        <div class="row g-2">
-          <div *ngFor="let category of categories" class="col-auto">
-            <span class="badge"
-                  style="background-color: #2d1b3d; color: #ff75f8; border: 1px solid #ff11f2;">
-              {{ category }}: {{ getImagesByCategory(category).length }}
-            </span>
-          </div>
-          <div class="col-auto">
-            <span class="badge"
-                  style="background-color: #666; color: white;">
-              Sin categoría: {{ getUncategorizedImages().length }}
-            </span>
-          </div>
+      <!-- Loading Indicator -->
+      <div *ngIf="isUploading" class="text-center mt-4">
+        <div class="spinner-border text-light" role="status">
+          <span class="visually-hidden">Cargando...</span>
         </div>
+        <p class="mt-2" style="color: #ff75f8;">Procesando imágenes...</p>
       </div>
     </div>
   </div>

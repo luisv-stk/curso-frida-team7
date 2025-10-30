@@ -1,22 +1,61 @@
-import { Component } from '@angular/core';
+import { Component, ViewEncapsulation, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+import { ImageData } from './models/image-data.model';
+
+// Define la clase CategoryImage
+class CategoryImage {
+  category: string;
+  images: string[];
+
+  constructor(category: string, images: string[]) {
+    this.category = category;
+    this.images = images.map(img => `img/${img}`);
+  }
+}
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatButtonModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, MatIconModule, DragDropModule],
   templateUrl: './app.html',
   styleUrls: ['./app.css'],
+  encapsulation: ViewEncapsulation.None
 })
 export class App {
-  isDragOver = false;
-  uploadedImages: File[] = [];
-  imagePreviewUrls: string[] = [];
-  isLoading = false;
+  @ViewChild('fileInput', { static: false }) fileInput!: ElementRef<HTMLInputElement>;
 
+  user = 'Jane Doe';
+  imageCategories = [
+    { category: 'Architecture', images: ['img/Rectangle 13.png'] },
+    { category: 'Food', images: ['img/Rectangle 14.png'] },
+    { category: 'Nature', images: ['img/Rectangle 15.png'] },
+    { category: 'Technology', images: ['img/Rectangle 16.png'] },
+    { category: 'People', images: ['img/Rectangle 17.png'] },
+    { category: 'Animals', images: ['img/Rectangle 18.png'] },
+  ];
+
+  // Properties for drag and drop functionality
+  uploadedImages: (ImageData & { category?: string; previewUrl: string; selected?: boolean })[] = [];
+  isDragOver = false;
+  categories = ['Architecture', 'Food'];
+  selectedCategory = '';
+  isSelectAllMode = false;
+  selectedImageCount = 0;
+  isUploading = false;
+
+  constructor() {}
+
+  getCategoryImages(): CategoryImage[] {
+    return [
+      new CategoryImage('Architecture', ['Rectangle 13.png', 'Rectangle 14.png', 'Rectangle 15.png']),
+      new CategoryImage('Food', ['Rectangle 16.png', 'Rectangle 17.png', 'Rectangle 18.png']),
+    ];
+  }
+
+  // Drag and drop event handlers
   onDragOver(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
@@ -35,98 +74,194 @@ export class App {
     this.isDragOver = false;
 
     const files = event.dataTransfer?.files;
-    if (files) {
-      this.handleFiles(files);
+    if (files && files.length > 0) {
+      this.handleFiles(Array.from(files));
     }
   }
 
-  onFileInputChange(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files) {
-      this.handleFiles(input.files);
-    }
-  }
-
+  // Click to select files
   onDropAreaClick(): void {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    fileInput?.click();
+    this.fileInput.nativeElement.click();
   }
 
-  removeImage(index: number, event: Event): void {
-    // Prevent event from bubbling up to the drop area
-    event.preventDefault();
-    event.stopPropagation();
-
-    // Remove image from both arrays at the specified index
-    this.uploadedImages.splice(index, 1);
-    this.imagePreviewUrls.splice(index, 1);
-
-    console.log(`Image at index ${index} removed. Remaining images:`, this.uploadedImages.length);
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.handleFiles(Array.from(input.files));
+    }
   }
 
-  private handleFiles(files: FileList): void {
-    const imageFiles = Array.from(files).filter(file =>
-      file.type.startsWith('image/')
-    );
+  // Process uploaded files
+  private handleFiles(files: File[]): void {
+    this.isUploading = true;
 
-    if (imageFiles.length === 0) return;
-
-    this.isLoading = true;
-    let processedCount = 0;
-
-    imageFiles.forEach(file => {
-      if (!this.uploadedImages.some(existing => existing.name === file.name)) {
-        this.uploadedImages.push(file);
-        this.processImageFile(file, () => {
-          processedCount++;
-          if (processedCount === imageFiles.length) {
-            // Agregar delay de 1.5 segundos antes de ocultar el spinner
-            setTimeout(() => {
-              this.isLoading = false;
-            }, 1500);
-          }
-        });
-      } else {
-        processedCount++;
-        if (processedCount === imageFiles.length) {
-          // Agregar delay de 1.5 segundos antes de ocultar el spinner
-          setTimeout(() => {
-            this.isLoading = false;
-          }, 1500);
+    const filePromises = Array.from(files).map(file => {
+      return new Promise<void>((resolve) => {
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const base64 = e.target?.result as string;
+            const imageData: ImageData & { category?: string; previewUrl: string; selected?: boolean } = {
+              filename: file.name,
+              base64: base64,
+              size: file.size,
+              type: file.type,
+              category: this.selectedCategory || undefined,
+              previewUrl: base64,
+              selected: false
+            };
+            this.uploadedImages.push(imageData);
+            resolve();
+          };
+          reader.readAsDataURL(file);
+        } else {
+          resolve();
         }
-      }
+      });
     });
 
-    console.log('Uploaded images:', this.uploadedImages);
+    Promise.all(filePromises).then(() => {
+      this.isUploading = false;
+      this.updateSelectedCount();
+    });
   }
 
-  private processImageFile(file: File, callback: () => void): void {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const imageUrl = e.target?.result as string;
-      console.log(`Image ${file.name} processed. Size: ${file.size} bytes`);
+  // Remove uploaded image
+  removeImage(index: number): void {
+    this.uploadedImages.splice(index, 1);
+  }
 
-      // Add image URL to preview array
-      this.imagePreviewUrls.push(imageUrl);
+  // Category management
+  assignCategory(imageIndex: number, category: string): void {
+    if (this.uploadedImages[imageIndex]) {
+      this.uploadedImages[imageIndex].category = category;
+    }
+  }
 
-      // Create image preview element for validation
-      const img = new Image();
-      img.onload = () => {
-        console.log(`Image ${file.name} dimensions: ${img.width}x${img.height}px`);
-        callback();
-      };
-      img.onerror = () => {
-        console.error(`Error loading image: ${file.name}`);
-        callback();
-      };
-      img.src = imageUrl;
-    };
+  // Bulk operations
+  selectAllImages(): void {
+    const shouldSelectAll = !this.isSelectAllMode;
+    this.uploadedImages.forEach(image => {
+      image.selected = shouldSelectAll;
+    });
+    this.isSelectAllMode = shouldSelectAll;
+    this.updateSelectedCount();
+  }
 
-    reader.onerror = () => {
-      console.error(`Error reading file: ${file.name}`);
-      callback();
-    };
+  deleteAllImages(): void {
+    this.uploadedImages = [];
+    this.selectedImageCount = 0;
+    this.isSelectAllMode = false;
+  }
 
-    reader.readAsDataURL(file);
+  deleteSelectedImages(): void {
+    this.uploadedImages = this.uploadedImages.filter(image => !image.selected);
+    this.selectedImageCount = 0;
+    this.isSelectAllMode = false;
+  }
+
+  categorizeSelectedImages(category: string): void {
+    if (category) {
+      this.uploadedImages.forEach(image => {
+        if (image.selected) {
+          image.category = category;
+        }
+      });
+    }
+  }
+
+  categorizeUncategorizedImages(category: string): void {
+    this.uploadedImages.forEach(image => {
+      if (!image.category) {
+        image.category = category;
+      }
+    });
+  }
+
+  // Individual image selection
+  toggleImageSelection(index: number): void {
+    this.uploadedImages[index].selected = !this.uploadedImages[index].selected;
+    this.updateSelectedCount();
+    this.checkSelectAllState();
+  }
+
+  private updateSelectedCount(): void {
+    this.selectedImageCount = this.uploadedImages.filter(image => image.selected).length;
+  }
+
+  private checkSelectAllState(): void {
+    const totalImages = this.uploadedImages.length;
+    const selectedImages = this.selectedImageCount;
+
+    if (selectedImages === 0) {
+      this.isSelectAllMode = false;
+    } else if (selectedImages === totalImages && totalImages > 0) {
+      this.isSelectAllMode = true;
+    } else {
+      this.isSelectAllMode = false;
+    }
+  }
+
+  // Enhanced category operations
+  moveSelectedToCategory(category: string): void {
+    this.uploadedImages.forEach(image => {
+      if (image.selected) {
+        image.category = category;
+        image.selected = false;
+      }
+    });
+    this.updateSelectedCount();
+    this.isSelectAllMode = false;
+  }
+
+  clearAllSelections(): void {
+    this.uploadedImages.forEach(image => {
+      image.selected = false;
+    });
+    this.selectedImageCount = 0;
+    this.isSelectAllMode = false;
+  }
+
+  // Get selected images
+  getSelectedImages(): (ImageData & { category?: string; previewUrl: string; selected?: boolean })[] {
+    return this.uploadedImages.filter(image => image.selected);
+  }
+
+  // Download functionality for selected images
+  downloadSelectedImages(): void {
+    const selectedImages = this.getSelectedImages();
+    selectedImages.forEach(image => {
+      const link = document.createElement('a');
+      link.href = image.previewUrl;
+      link.download = image.filename;
+      link.click();
+    });
+  }
+
+  // Batch size validation
+  getTotalFileSize(): number {
+    return this.uploadedImages.reduce((total, image) => total + image.size, 0);
+  }
+
+  getSelectedFileSize(): number {
+    return this.getSelectedImages().reduce((total, image) => total + image.size, 0);
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // Get images by category
+  getImagesByCategory(category: string): (ImageData & { category?: string; previewUrl: string })[] {
+    return this.uploadedImages.filter(image => image.category === category);
+  }
+
+  // Get uncategorized images
+  getUncategorizedImages(): (ImageData & { category?: string; previewUrl: string })[] {
+    return this.uploadedImages.filter(image => !image.category);
   }
 }

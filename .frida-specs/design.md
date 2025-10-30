@@ -2,439 +2,760 @@
 
 ## 1. Architecture Overview
 
-### 1.1 High-Level Architecture  
-We will build a client–server web application for uploading, previewing, and managing images. The architecture is organized into three main tiers:
-
-  1. **Frontend**  
-     - Angular 16+ application (Standalone Components, RxJS)  
-     - Material Design (Angular Material) for UI  
-     - TypeScript, SCSS/CSS  
-
-  2. **Backend (API Server)**  
-     - Node.js + Express (TypeScript)  
-     - RESTful JSON APIs  
-     - File upload handling (Multer)  
-     - Business logic (validation, deduplication)  
-
-  3. **Persistence & Storage**  
-     - Metadata store: PostgreSQL  
-     - Binary store: AWS S3 (or Azure Blob Storage / Google Cloud Storage)  
-     - CDN: AWS CloudFront for serving images  
-
-#### Monolithic vs. Microservices  
-We opt for a **modular monolith** initially. All server-side concerns (auth, uploads, image processing) live in one codebase but are organized into clear modules. This allows rapid iteration. If scaling demands emerge, we can extract microservices (e.g., a dedicated Image Processor service).
-
-### 1.2 Architecture Diagram  
+### 1.1 High-Level Architecture
+The system follows a **Client-Server Architecture** with a progressive web application frontend and a backend API service. The application appears to be an image management system with drag-and-drop functionality, category management, and bulk operations.
 
 ```mermaid
-flowchart LR
-  subgraph Client
-    A[Angular App<br/>(Drag & Drop, UI)]
-  end
+graph TB
+    A[Web Browser] --> B[Angular Frontend]
+    B --> C[HTTP API Gateway]
+    C --> D[Image Management Service]
+    C --> E[File Storage Service]
+    C --> F[Authentication Service]
+    D --> G[Database]
+    E --> H[Cloud Storage/CDN]
+    F --> I[User Database]
+```
 
-  subgraph Server
-    B[API Gateway<br/>(Express)]
-    C[Auth Module<br/>(JWT)]
-    D[Image Module<br/>(Multer, S3 Uploader)]
-    E[Database Module<br/>(PostgreSQL)]
-  end
-
-  subgraph Storage
-    F[AWS S3 Buckets]
-    G[CDN: CloudFront]
-  end
-
-  A -->|HTTPS JSON| B
-  B --> C
-  B --> D
-  D --> F
-  D --> E
-  A -->|S3 Signed GET| G
-  G --> F
-  B --> E
+### 1.2 Architecture Diagram
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Web Client    │    │   API Gateway   │    │   Backend       │
+│   (Angular)     │◄──►│   (REST/HTTP)   │◄──►│   Services      │
+│                 │    │                 │    │                 │
+│ - Image Upload  │    │ - Rate Limiting │    │ - Image Proc.   │
+│ - Drag & Drop   │    │ - Auth Check    │    │ - File Storage  │
+│ - Category Mgmt │    │ - Validation    │    │ - Metadata DB   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ### 1.3 Technology Stack
 
-- **Frontend technologies**  
-  - Angular 16+ (Standalone Components)  
-  - Angular Material (MatIconModule, MatButtonModule, MatDialog)  
-  - RxJS  
-  - HTML5 Drag & Drop API  
-- **Backend technologies**  
-  - Node.js v18+ with TypeScript  
-  - Express.js  
-  - Multer (multipart/form-data parser)  
-  - AWS SDK (S3 integration)  
-  - JWT (jsonwebtoken)  
-- **Database systems**  
-  - PostgreSQL (relational metadata store)  
-  - Optional Redis for caching  
-- **Third-party services and APIs**  
-  - AWS S3 (object storage)  
-  - AWS CloudFront (CDN)  
-  - SendGrid / SES (email notifications)  
-  - Sentry (error monitoring)  
-- **Development tools**  
-  - VSCode  
-  - ESLint, Prettier  
-  - Jest (unit & integration tests)  
-  - Cypress (E2E tests)  
-  - Docker & Docker Compose  
-  - GitHub Actions (CI/CD)  
+**Frontend Technologies:**
+- Angular 15+ (Component-based architecture)
+- TypeScript for type safety
+- Bootstrap 5 for responsive UI
+- RxJS for reactive programming
+- Angular Material for advanced UI components
 
----
+**Backend Technologies:**
+- Node.js with Express.js or NestJS
+- TypeScript for backend consistency
+- Multer for file upload handling
+- Sharp or ImageMagick for image processing
+- JWT for authentication
+
+**Database Systems:**
+- PostgreSQL for relational data (users, categories, metadata)
+- Redis for caching and session management
+- Cloud storage (AWS S3/Google Cloud Storage) for images
+
+**Third-party Services:**
+- CDN for image delivery (CloudFlare/AWS CloudFront)
+- Email service (SendGrid/AWS SES)
+- Image optimization service (Cloudinary/ImageKit)
 
 ## 2. Component Design
 
 ### 2.1 Frontend Components
 
-| Component              | Responsibilities                                                                          | Interactions                                 |
-|------------------------|-------------------------------------------------------------------------------------------|----------------------------------------------|
-| UploadAreaComponent    | - Handles drag & drop<br/>- Click-to-upload<br/>- Triggers file selection dialog           | Emits `filesSelected` event                 |
-| ImagePreviewList       | - Renders a list/grid of thumbnails<br/>- Shows remove (✕) buttons                        | Inputs: `imageUrls: string[]`                |
-| ImagePreviewItem       | - Displays single thumbnail and remove icon<br/>- Fires remove request on icon click      | Emits `remove(index: number)`                |
-| FileInputHidden        | - Hidden `<input type="file" multiple>`<br/>- Relays change events to parent              | On change → emit FileList                   |
-| NotificationService    | - Shows toasts/snackbars<br/>- Success/error messages                                     | Injected into all UI components              |
+**Core Components:**
+```typescript
+// Image Upload Component
+@Component({
+  selector: 'app-image-upload',
+  template: './image-upload.component.html'
+})
+export class ImageUploadComponent {
+  - dropArea: ElementRef
+  - selectedFiles: File[]
+  - uploadProgress: Observable<number>
+  - onDragOver(): void
+  - onDragLeave(): void
+  - onDrop(event: DragEvent): void
+  - selectFiles(): void
+  - uploadImages(): Observable<UploadResponse>
+}
 
-#### Interaction Flow
+// Image Gallery Component
+@Component({
+  selector: 'app-image-gallery'
+})
+export class ImageGalleryComponent {
+  - images: Image[]
+  - selectedImages: Set<string>
+  - categories: Category[]
+  - filterByCategory(categoryId: string): void
+  - selectImage(imageId: string): void
+  - deleteSelectedImages(): void
+  - bulkUpdateCategory(): void
+}
 
-1. **User drags files** onto `UploadAreaComponent` → `onDragOver` & `onDrop` handlers  
-2. **User clicks upload area** → hidden `FileInputHidden` is `.click()`-ed → `onFileInputChange()`  
-3. Files are emitted to parent (`AppComponent`) → calls service to POST files  
-4. On success → receives back list of processed image URLs → updates `ImagePreviewList`  
+// Category Management Component
+@Component({
+  selector: 'app-category-manager'
+})
+export class CategoryManagerComponent {
+  - categories: Category[]
+  - createCategory(name: string): void
+  - updateCategory(id: string, data: Partial<Category>): void
+  - deleteCategory(id: string): void
+}
+```
 
 ### 2.2 Backend Services
 
-| Service            | Role                                                                 | Key Interfaces                                       |
-|--------------------|----------------------------------------------------------------------|------------------------------------------------------|
-| Express App        | HTTP server & routing                                               | `/api/auth`, `/api/images`, `/api/users`             |
-| Auth Controller    | JWT issuance & validation                                           | POST `/api/auth/login`, POST `/api/auth/register`    |
-| Image Controller   | Receive uploads, trigger S3 uploads, metadata CRUD                  | POST `/api/images`, GET `/api/images`, DELETE `/api/images/:id` |
-| Image Service      | Business logic: dedupe, validations (type/size), generate presigned URLs | `uploadFiles(files: Express.Multer.File[])`, `delete(id: string)` |
-| Database Module    | Encapsulates PostgreSQL queries via TypeORM/Prisma                   | Entities: `User`, `Image`                            |
-| Cache Layer (Opt.) | Redis caching of presigned URLs or frequently-used data             | `cache.get`, `cache.set`                            |
+**Service Architecture:**
+```typescript
+// Image Service
+export class ImageService {
+  - uploadImage(file: Express.Multer.File, metadata: ImageMetadata): Promise<Image>
+  - getImages(filters: ImageFilters): Promise<Image[]>
+  - deleteImage(id: string): Promise<void>
+  - updateImageMetadata(id: string, metadata: Partial<ImageMetadata>): Promise<Image>
+  - generateThumbnail(originalPath: string): Promise<string>
+}
+
+// Category Service
+export class CategoryService {
+  - createCategory(data: CreateCategoryDto): Promise<Category>
+  - getCategories(): Promise<Category[]>
+  - updateCategory(id: string, data: UpdateCategoryDto): Promise<Category>
+  - deleteCategory(id: string): Promise<void>
+}
+
+// File Storage Service
+export class StorageService {
+  - uploadFile(file: Buffer, path: string): Promise<string>
+  - deleteFile(path: string): Promise<void>
+  - generateSignedUrl(path: string): Promise<string>
+}
+```
 
 ### 2.3 Database Layer
 
-- Use an ORM (Prisma or TypeORM) for schema migrations, type safety.  
-- Connection pooling for performance.  
-- Data access via repository pattern.  
-
----
+**Data Access Pattern:**
+- Repository Pattern with TypeORM or Prisma
+- Connection pooling for PostgreSQL
+- Redis client for caching
+- Transaction management for bulk operations
 
 ## 3. Data Models
 
 ### 3.1 Database Schema
 
-Users Table:
-- id: UUID (PK)
-- email: String (Unique, indexed)
-- password_hash: String
-- role: Enum('admin','user')
-- created_at: Timestamp
-- updated_at: Timestamp
+```sql
+-- Users Table
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100),
+  last_name VARCHAR(100),
+  role VARCHAR(50) DEFAULT 'user',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-Images Table:
-- id: UUID (PK)
-- user_id: UUID (FK → Users.id, indexed)
-- original_filename: String
-- s3_key: String (unique storage key)
-- url: String (public/CloudFront URL)
-- size: Integer (bytes)
-- mime_type: String
-- width: Integer (px)
-- height: Integer (px)
-- created_at: Timestamp
+-- Categories Table
+CREATE TABLE categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  color VARCHAR(7), -- Hex color code
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Images Table
+CREATE TABLE images (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  filename VARCHAR(255) NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  file_path VARCHAR(500) NOT NULL,
+  thumbnail_path VARCHAR(500),
+  file_size INTEGER NOT NULL,
+  mime_type VARCHAR(100) NOT NULL,
+  width INTEGER,
+  height INTEGER,
+  category_id UUID REFERENCES categories(id),
+  uploaded_by UUID REFERENCES users(id),
+  tags TEXT[], -- PostgreSQL array
+  alt_text VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Image Tags Junction Table (for many-to-many relationship)
+CREATE TABLE image_tags (
+  image_id UUID REFERENCES images(id),
+  tag VARCHAR(100) NOT NULL,
+  PRIMARY KEY (image_id, tag)
+);
+
+-- Indexes for performance
+CREATE INDEX idx_images_category ON images(category_id);
+CREATE INDEX idx_images_uploaded_by ON images(uploaded_by);
+CREATE INDEX idx_images_created_at ON images(created_at);
+CREATE INDEX idx_images_tags ON images USING GIN(tags);
+```
 
 ### 3.2 Data Flow
 
-1. **Client → API (POST /api/images)**: multipart form data  
-2. **API**:  
-   - Validate JWT → extract user  
-   - Validate files (type, size, dimension)  
-   - Store metadata record in DB  
-   - Upload binary to S3 → generate `s3_key`  
-   - Update DB record with S3 info & computed dimensions  
-   - Return array of image DTOs  
-3. **Client**: displays returned URLs  
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant ImageService
+    participant StorageService
+    participant Database
+    participant CDN
 
----
+    Client->>API: Upload Image(s)
+    API->>ImageService: Process Upload
+    ImageService->>StorageService: Store Original
+    StorageService->>CDN: Upload File
+    ImageService->>ImageService: Generate Thumbnail
+    ImageService->>StorageService: Store Thumbnail
+    ImageService->>Database: Save Metadata
+    Database-->>ImageService: Return Image Record
+    ImageService-->>API: Return Image Data
+    API-->>Client: Upload Success Response
+```
 
 ## 4. API Design
 
 ### 4.1 Endpoints
 
-#### Authentication
-
-```
-POST /api/auth/register
-Request:
-  {
-    "email": string,
-    "password": string
-  }
-Response:
-  {
-    "id": string,
-    "email": string,
-    "token": string
-  }
-Authentication: None
-```
-
+**Authentication Endpoints:**
 ```
 POST /api/auth/login
-Request:
-  {
-    "email": string,
-    "password": string
-  }
-Response:
-  {
-    "token": string
-  }
+Request: { email: string, password: string }
+Response: { token: string, user: User, expiresIn: number }
 Authentication: None
+
+POST /api/auth/register
+Request: { email: string, password: string, firstName: string, lastName: string }
+Response: { message: string, user: User }
+Authentication: None
+
+POST /api/auth/refresh
+Request: { refreshToken: string }
+Response: { token: string, expiresIn: number }
+Authentication: Bearer Token
 ```
 
-#### Images
+**Image Management Endpoints:**
+```
+POST /api/images/upload
+Request: FormData with files[] and metadata
+Response: { images: Image[], uploadCount: number }
+Authentication: Bearer Token
 
-```
-POST /api/images
-Headers:
-  Authorization: Bearer <token>
-Body: multipart/form-data
-  files: File[]
-Response:
-  [
-    {
-      "id": string,
-      "url": string,
-      "originalFilename": string,
-      "size": number,
-      "width": number,
-      "height": number
-    }
-  ]
-Authentication: Required
-```
-
-```
 GET /api/images
-Headers:
-  Authorization: Bearer <token>
-Query:
-  page?: number
-  size?: number
-Response:
-  {
-    "items": [ ImageDTO ],
-    "total": number,
-    "page": number,
-    "size": number
-  }
-Authentication: Required
+Query: ?page=1&limit=20&category=uuid&tags=tag1,tag2
+Response: { images: Image[], total: number, page: number }
+Authentication: Bearer Token
+
+PUT /api/images/:id
+Request: { categoryId?: string, tags?: string[], altText?: string }
+Response: { image: Image }
+Authentication: Bearer Token
+
+DELETE /api/images/:id
+Response: { message: string }
+Authentication: Bearer Token
+
+POST /api/images/bulk-update
+Request: { imageIds: string[], updates: Partial<ImageMetadata> }
+Response: { updatedCount: number }
+Authentication: Bearer Token
+
+DELETE /api/images/bulk-delete
+Request: { imageIds: string[] }
+Response: { deletedCount: number }
+Authentication: Bearer Token
 ```
 
+**Category Management Endpoints:**
 ```
-DELETE /api/images/:id
-Headers:
-  Authorization: Bearer <token>
-Response:
-  { "success": true }
-Authentication: Required
+GET /api/categories
+Response: { categories: Category[] }
+Authentication: Bearer Token
+
+POST /api/categories
+Request: { name: string, description?: string, color?: string }
+Response: { category: Category }
+Authentication: Bearer Token
+
+PUT /api/categories/:id
+Request: { name?: string, description?: string, color?: string }
+Response: { category: Category }
+Authentication: Bearer Token
+
+DELETE /api/categories/:id
+Response: { message: string }
+Authentication: Bearer Token
 ```
 
 ### 4.2 API Patterns
 
-- **RESTful conventions**: CRUD resources under `/api/images`.  
-- **Error handling**: Standard problem+json responses.  
-- **Pagination**: `page`, `size` query parameters.  
-- **Security**: JWT in `Authorization` header.  
+**RESTful Conventions:**
+- Use HTTP status codes appropriately (200, 201, 400, 401, 404, 500)
+- Consistent URL naming (nouns, not verbs)
+- Proper HTTP methods (GET, POST, PUT, DELETE)
+- Pagination for list endpoints
+- Filtering and sorting support
 
----
+**Response Format:**
+```typescript
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message: string;
+  errors?: ValidationError[];
+  meta?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+  };
+}
+```
 
 ## 5. Security Design
 
 ### 5.1 Authentication Strategy
 
-- JWT Tokens (signed with RS256 or HS256)  
-- Tokens issued at login/register, with 1h expiration and refresh tokens if needed  
-- Token stored in HttpOnly Secure cookie or localStorage (depending on XSS concerns)  
+**JWT-based Authentication:**
+- Access tokens (15-minute expiry)
+- Refresh tokens (7-day expiry)
+- Token storage in HTTP-only cookies
+- Token rotation on refresh
+
+```typescript
+interface JWTPayload {
+  sub: string; // user ID
+  email: string;
+  role: string;
+  iat: number;
+  exp: number;
+}
+```
 
 ### 5.2 Authorization
 
-- Role-Based Access Control (RBAC)  
-- `User` can CRUD own images  
-- `Admin` can view/delete all images  
-- Middleware checks `req.user.role` and resource ownership  
+**Role-Based Access Control:**
+```typescript
+enum UserRole {
+  ADMIN = 'admin',
+  MODERATOR = 'moderator',
+  USER = 'user'
+}
+
+// Permissions matrix
+const permissions = {
+  [UserRole.ADMIN]: ['*'], // All permissions
+  [UserRole.MODERATOR]: ['images:read', 'images:create', 'images:update', 'images:delete', 'categories:*'],
+  [UserRole.USER]: ['images:read', 'images:create', 'images:update:own', 'images:delete:own']
+};
+```
 
 ### 5.3 Data Protection
 
-- **Encryption at Rest**: AWS S3 with SSE-S3 or SSE-KMS  
-- **Encryption in Transit**: TLS for all HTTP endpoints  
-- **Input Validation**:  
-  - File type whitelisting (`image/jpeg`, `image/png`, etc.)  
-  - Max file size (e.g., 5MB)  
-- **Sanitization**: No user-submitted HTML, minimal risk  
+**Security Measures:**
+- File type validation (whitelist approach)
+- File size limits (configurable per user role)
+- Image scanning for malicious content
+- SQL injection prevention with parameterized queries
+- XSS protection with content sanitization
+- CSRF protection with tokens
+- Rate limiting per endpoint
+- Input validation with Joi/class-validator
 
----
+**File Upload Security:**
+```typescript
+const uploadConfig = {
+  allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  maxFileSize: 10 * 1024 * 1024, // 10MB
+  maxFiles: 20,
+  virusScan: true,
+  generateUniqueNames: true
+};
+```
 
 ## 6. Integration Points
 
 ### 6.1 External Services
 
-- **AWS S3**: Object storage for images  
-- **CloudFront CDN**: Edge caching of public images  
-- **SendGrid/SES**: Transactional emails (welcome, alerts)  
-- **Sentry**: Error tracking  
+**Cloud Storage Integration:**
+```typescript
+interface StorageProvider {
+  uploadFile(file: Buffer, path: string): Promise<string>;
+  deleteFile(path: string): Promise<void>;
+  generatePresignedUrl(path: string, expiry: number): Promise<string>;
+}
+
+// AWS S3 Implementation
+class S3StorageService implements StorageProvider {
+  private s3Client: AWS.S3;
+  // Implementation details...
+}
+```
+
+**Email Service Integration:**
+- Welcome emails for new users
+- Password reset notifications
+- Bulk operation completion notifications
+
+**CDN Integration:**
+- Automatic image optimization
+- Global content delivery
+- Bandwidth optimization
 
 ### 6.2 Internal Integrations
 
-- **Redis**: Cache presigned S3 URLs  
-- **PostgreSQL**: Central metadata store  
-- **Local File System** (Dev): Fallback storage in Docker  
-
----
+**Service Communication:**
+- Event-driven architecture for decoupled services
+- Message queues for async operations (Bull/Redis)
+- Webhooks for external system notifications
 
 ## 7. Performance Considerations
 
 ### 7.1 Optimization Strategies
 
-- **Caching**  
-  - CDN for static assets and images  
-  - Redis for presigned URLs & hot metadata  
-- **Database Indexing**  
-  - Index on `user_id`, `created_at`  
-- **Query Optimization**  
-  - Use pagination to limit result sets  
-- **Code Splitting**  
-  - Angular lazy-loading modules  
-- **Throttling & Rate Limiting**  
-  - Prevent DoS on image upload endpoint  
+**Caching Strategy:**
+```typescript
+// Redis caching layers
+const cacheConfig = {
+  userSessions: { ttl: 3600 }, // 1 hour
+  imageMetadata: { ttl: 1800 }, // 30 minutes
+  categories: { ttl: 3600 * 24 }, // 24 hours
+  thumbnails: { ttl: 3600 * 24 * 7 } // 7 days
+};
+```
+
+**Database Optimization:**
+- Indexed queries for common search patterns
+- Connection pooling (max 20 connections)
+- Query result caching
+- Lazy loading for related entities
+
+**Frontend Optimization:**
+- Virtual scrolling for large image lists
+- Progressive image loading
+- Image lazy loading with intersection observer
+- Bundle splitting and code splitting
+- Service worker for offline capabilities
 
 ### 7.2 Scalability
 
-- **Horizontal Scaling**  
-  - Stateless API servers in Auto Scaling Group  
-  - Sticky sessions not required (JWT-based)  
-- **Load Balancing**  
-  - ALB / NGINX in front of Express servers  
-- **Database Sharding** (Future)  
-  - Horizontal read replicas for reporting  
+**Horizontal Scaling:**
+- Stateless application servers
+- Load balancer (NGINX/AWS ALB)
+- Database read replicas
+- CDN for static assets
 
----
+**Auto-scaling Configuration:**
+```yaml
+# Kubernetes HPA example
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: image-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: image-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
 
 ## 8. Error Handling and Logging
 
 ### 8.1 Error Handling Strategy
 
-- **Backend**  
-  - Centralized error middleware  
-  - Return HTTP status codes with problem+json body  
-  - Retry mechanism for S3 transient failures  
-- **Frontend**  
-  - Catch HTTP errors in services  
-  - Display user-friendly messages via `MatSnackBar`  
-  - Fallback UI for network failures  
+**Error Classification:**
+```typescript
+enum ErrorType {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
+  AUTHORIZATION_ERROR = 'AUTHORIZATION_ERROR',
+  NOT_FOUND_ERROR = 'NOT_FOUND_ERROR',
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
+  EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR'
+}
+
+class AppError extends Error {
+  public statusCode: number;
+  public type: ErrorType;
+  public isOperational: boolean;
+
+  constructor(message: string, statusCode: number, type: ErrorType) {
+    super(message);
+    this.statusCode = statusCode;
+    this.type = type;
+    this.isOperational = true;
+  }
+}
+```
+
+**Global Error Handler:**
+```typescript
+const errorHandler = (error: Error, req: Request, res: Response, next: NextFunction) => {
+  if (error instanceof AppError) {
+    return res.status(error.statusCode).json({
+      success: false,
+      message: error.message,
+      type: error.type
+    });
+  }
+
+  // Log unexpected errors
+  logger.error('Unexpected error:', error);
+  
+  return res.status(500).json({
+    success: false,
+    message: 'Internal server error'
+  });
+};
+```
 
 ### 8.2 Logging and Monitoring
 
-- **What gets logged**  
-  - API requests: method, path, response time, status  
-  - Errors with stack traces (Sentry)  
-  - Upload metrics: file size, processing time  
-- **Log Aggregation**  
-  - Centralized in AWS CloudWatch or ELK Stack  
-- **Performance Monitoring**  
-  - APM (e.g., New Relic) for backend  
-  - Web Vitals reporting for frontend  
+**Logging Strategy:**
+```typescript
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' }),
+    new winston.transports.Console()
+  ]
+});
+```
 
----
+**Monitoring Metrics:**
+- Request duration and throughput
+- Error rates by endpoint
+- File upload success/failure rates
+- Database query performance
+- Memory and CPU usage
+- Storage usage and costs
 
 ## 9. Development Workflow
 
 ### 9.1 Project Structure
 
 ```
-/client
-  /src
-    /app
-      /components
-      /services
-      /models
-    /assets
-/docker
-/docker-compose.yml
-/server
-  /src
-    /controllers
-    /services
-    /repositories
-    /middlewares
-    /models
-  /prisma /migrations
-  Dockerfile
-.github
-  workflows/ci-cd.yml
+team7/
+├── src/
+│   ├── app/
+│   │   ├── components/
+│   │   │   ├── image-upload/
+│   │   │   ├── image-gallery/
+│   │   │   └── category-manager/
+│   │   ├── services/
+│   │   ├── models/
+│   │   ├── guards/
+│   │   └── shared/
+│   ├── assets/
+│   └── environments/
+├── backend/
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── services/
+│   │   ├── models/
+│   │   ├── middleware/
+│   │   ├── utils/
+│   │   └─�� config/
+│   ├── tests/
+│   └── uploads/
+├── docker-compose.yml
+├── Dockerfile
+└── README.md
 ```
 
 ### 9.2 Development Environment
 
-- **Local Setup**  
-  - Docker Compose (PostgreSQL, Redis, MinIO for S3)  
-  - `yarn install && yarn start:dev` (client & server)  
-- **Environment Variables**  
-  - `.env.development`, `.env.test`, `.env.production`  
-  - Keys: `JWT_SECRET`, `DATABASE_URL`, `S3_BUCKET`, etc.  
-- **Config**  
-  - Separate configs for dev vs prod (logging level, CORS)  
+**Environment Variables:**
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/imagedb
+REDIS_URL=redis://localhost:6379
+
+# JWT
+JWT_SECRET=your-secret-key
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Storage
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_BUCKET_NAME=your-bucket-name
+AWS_REGION=us-east-1
+
+# Email
+SENDGRID_API_KEY=your-sendgrid-key
+
+# App
+NODE_ENV=development
+PORT=3000
+FRONTEND_URL=http://localhost:4200
+```
 
 ### 9.3 Testing Strategy
 
-- **Unit Tests**  
-  - Jest (server) & Karma/Jasmine (Angular)  
-  - Mock external dependencies (S3, DB)  
-- **Integration Tests**  
-  - Spin up in-memory/postgres container  
-  - Test API endpoints via Supertest  
-- **E2E Tests**  
-  - Cypress for user flows (upload, preview, delete)  
-- **Coverage Goals**  
-  - > 80% lines coverage on critical modules  
+**Testing Pyramid:**
+```typescript
+// Unit Tests (70%)
+describe('ImageService', () => {
+  it('should upload image successfully', async () => {
+    const mockFile = createMockFile();
+    const result = await imageService.uploadImage(mockFile, metadata);
+    expect(result).toBeDefined();
+    expect(result.id).toBeTruthy();
+  });
+});
 
----
+// Integration Tests (20%)
+describe('Image API', () => {
+  it('should handle file upload endpoint', async () => {
+    const response = await request(app)
+      .post('/api/images/upload')
+      .attach('files', 'test-image.jpg')
+      .expect(201);
+    
+    expect(response.body.images).toHaveLength(1);
+  });
+});
+
+// E2E Tests (10%)
+describe('Image Upload Flow', () => {
+  it('should allow user to upload and view images', async () => {
+    await page.goto('/upload');
+    await page.setInputFiles('input[type="file"]', 'test-image.jpg');
+    await page.click('[data-testid="upload-button"]');
+    await expect(page.locator('[data-testid="image-card"]')).toBeVisible();
+  });
+});
+```
+
+**Test Coverage Goals:**
+- Unit tests: 80% code coverage
+- Integration tests: 70% endpoint coverage
+- E2E tests: Critical user flows
 
 ## 10. Deployment Architecture
 
 ### 10.1 Deployment Strategy
 
-- **CI/CD with GitHub Actions**  
-  - On `main` push: run lint, tests → build Docker images → push to registry  
-  - On merge to `staging`: deploy to staging cluster  
-  - On tag/release: promote to production  
-- **Environments**  
-  - **Development**: local & ephemeral Docker  
-  - **Staging**: AWS EKS Fargate or ECS  
-  - **Production**: AWS EKS with auto-scaling  
+**CI/CD Pipeline:**
+```yaml
+# GitHub Actions example
+name: Deploy to Production
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: npm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Docker image
+        run: docker build -t image-app:${{ github.sha }} .
+      - name: Push to registry
+        run: docker push image-app:${{ github.sha }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to production
+        run: kubectl set image deployment/image-app app=image-app:${{ github.sha }}
+```
 
 ### 10.2 Infrastructure
 
-- **Hosting Platform**: AWS  
-- **Container Strategy**  
-  - Docker containers orchestrated by Kubernetes (EKS)  
-  - Separate deployments for `client` & `server`  
-- **Database Hosting**  
-  - AWS RDS for PostgreSQL (Multi-AZ)  
-  - Read replicas for scaling reads  
-- **Secrets Management**  
-  - AWS Secrets Manager or Parameter Store  
+**Container Configuration:**
+```dockerfile
+# Multi-stage build
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
 
----
+FROM node:18-alpine AS production
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
 
-**Trade-offs & Considerations**  
-- Starting with a monolith accelerates time-to-market; splitting services can occur later.  
-- Using managed services (AWS S3, RDS) reduces operational burden at the cost of vendor lock-in.  
-- Presigned URLs enable direct client–S3 uploads but complicate security rules.  
+**Kubernetes Deployment:**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: image-service
+  template:
+    metadata:
+      labels:
+        app: image-service
+    spec:
+      containers:
+      - name: app
+        image: image-service:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: url
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+```
 
-This specification provides a clear, end-to-end blueprint for building, testing, and deploying a robust image upload and management system.
+**Infrastructure Components:**
+- **Frontend**: Deployed on Vercel/Netlify with CDN
+- **Backend**: Kubernetes cluster on AWS EKS/Google GKE
+- **Database**: Managed PostgreSQL (AWS RDS/Google Cloud SQL)
+- **Cache**: Managed Redis (AWS ElastiCache/Google Memorystore)
+- **Storage**: AWS S3/Google Cloud Storage with CDN
+- **Monitoring**: DataDog/New Relic/Prometheus + Grafana
+
+This design specification provides a solid foundation for building a scalable, secure, and maintainable image management system with drag-and-drop functionality. The architecture supports the current CSS styling requirements while providing room for future enhancements and scaling.

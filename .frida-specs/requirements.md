@@ -1,171 +1,196 @@
 # Requirements Specification
 
 ## 1. Overview
-This project is an Angular standalone component that provides a client-side image upload experience using drag-and-drop or file-picker interactions. Users can drag images onto a designated drop zone or click the zone to open the file dialog. Uploaded images are previewed as thumbnails, and users can remove any image before final submission. The component prevents duplicate uploads and enforces client-side validation (file type and size).
 
----
+This project involves enhancing a drag-and-drop image upload interface by expanding the dragging zone area. The current implementation appears to have a limited drop area that cuts off or restricts the drag-and-drop functionality, negatively impacting user experience. The solution requires modifying the CSS styling to create a larger, more accessible drop zone while maintaining the existing visual design and functionality.
 
 ## 2. Functional Requirements
 
 ### 2.1 Core Functionality
-1. **Drag & Drop Upload** (Must Have)  
-   - Detect when a file is dragged over the drop zone.  
-   - Highlight the drop zone on drag over.  
-   - Handle file drop and process image files.
 
-2. **Click-to-Upload** (Must Have)  
-   - Clicking the drop zone opens the native file selection dialog (`<input type="file">`).  
-   - Support single or multiple file selection.
+**REQ-F001** (Must Have): The drag-and-drop area must be expanded to provide adequate space for users to drag files without the interface being cut off or truncated.
 
-3. **Image Preview** (Must Have)  
-   - Generate a Base64 data URL for each image.  
-   - Display thumbnails in a grid below or within the drop zone.
+**REQ-F002** (Must Have): The expanded drop area must maintain all existing drag-and-drop behaviors including:
+- Visual feedback when hovering over the drop zone
+- Drag-over state indication with color changes and animations
+- Proper file acceptance and rejection handling
 
-4. **Remove Image** (Must Have)  
-   - Each thumbnail has an “X” icon (or similar) to remove that image.  
-   - Removal updates the internal file list and preview list.
+**REQ-F003** (Must Have): The drop area must support multiple file selection and upload simultaneously.
 
-5. **Duplicate Prevention** (Should Have)  
-   - Prevent uploading the same image file name twice.  
-   - Notify the user when a duplicate is detected (e.g., toast or console warning).
-
-6. **File Type Validation** (Must Have)  
-   - Only accept `image/*` MIME types.  
-   - Reject non-image files and optionally display an error message.
-
-7. **File Size Validation** (Could Have)  
-   - Enforce a configurable maximum file size (e.g., 5 MB).  
-   - Reject files exceeding the size limit with a clear user message.
+**REQ-F004** (Must Have): Image preview functionality must remain intact after drop area modifications.
 
 ### 2.2 User Interactions
-- **Drag Over**:  
-  - onDragOver(event) ⇒ `event.preventDefault()`, set `isDragOver = true`.
-- **Drag Leave**:  
-  - onDragLeave(event) ⇒ `event.preventDefault()`, set `isDragOver = false`.
-- **Drop**:  
-  - onDrop(event) ⇒ `event.preventDefault()`, set `isDragOver = false`, call `handleFiles(files)`.
-- **Click Zone**:  
-  - onDropAreaClick() ⇒ programmatically click hidden file input.
-- **File Input Change**:  
-  - onFileInputChange(event) ⇒ call `handleFiles(event.target.files)`.
-- **Remove Click**:  
-  - removeImage(index) ⇒ splice both `uploadedImages` and `imagePreviewUrls`.
+
+**REQ-F005** (Must Have): Users must be able to drag files from anywhere within the expanded drop zone without losing the drag state.
+
+**REQ-F006** (Must Have): The drop area must provide clear visual boundaries that are easily identifiable.
+
+**REQ-F007** (Should Have): Users should receive immediate visual feedback when entering and exiting the drop zone.
+
+**REQ-F008** (Must Have): The interface must support both drag-and-drop and traditional file selection methods.
 
 ### 2.3 Data Management
-- **In-Memory Arrays**  
-  - `uploadedImages: File[]` – list of File objects.  
-  - `imagePreviewUrls: string[]` – Base64 URLs for previews.
 
-- **FileReader Usage**  
-  - Use `FileReader.readAsDataURL(file)` to generate preview URL.  
-  - Log file processing details (size, dimensions).
+**REQ-F009** (Must Have): All uploaded images must maintain their metadata and categorization capabilities.
 
-- **No Persistent Storage**  
-  - All data lives in client memory; no backend or local storage.
+**REQ-F010** (Must Have): Image deletion functionality must continue to work after modifications.
 
----
+**REQ-F011** (Must Have): Bulk operations on images must remain functional.
 
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance
-- Initial drop or click response time < 100 ms.  
-- Ability to handle up to 20 images concurrently without UI lag.  
-- Lazy rendering of previews if more than 10 images.
+
+**REQ-NF001**: The expanded drop area must not negatively impact page load times (target: < 3 seconds).
+
+**REQ-NF002**: Drag-and-drop animations must maintain smooth 60fps performance.
+
+**REQ-NF003**: The interface must handle up to 50 simultaneous file uploads without performance degradation.
 
 ### 3.2 Security
-- Enforce MIME-type checking (`file.type.startsWith('image/')`).  
-- Prevent script injection via Base64 payloads (Angular binding sanitizes URLs).  
-- No direct file upload to server; reduces attack surface.
+
+**REQ-NF004**: File type validation must be maintained for all upload methods.
+
+**REQ-NF005**: Maximum file size restrictions must continue to be enforced.
+
+**REQ-NF006**: The expanded drop area must not introduce any new security vulnerabilities.
 
 ### 3.3 Usability
-- Highlight drop zone visually (border color change) on drag over.  
-- Show clear “Click or drag images here” instructional text.  
-- Accessible:  
-  - Keyboard focus on drop zone (Enter/Space triggers file dialog).  
-  - `aria-label` for drop zone and remove buttons.  
-- Compatible with modern browsers (Chrome, Firefox, Edge, Safari).
+
+**REQ-NF007**: The drop area must be at least 300px in height on desktop devices.
+
+**REQ-NF008**: The drop area must be responsive and adapt to different screen sizes.
+
+**REQ-NF009**: Visual indicators must be colorblind-friendly and accessible.
+
+**REQ-NF010**: The interface must maintain WCAG 2.1 AA accessibility standards.
 
 ### 3.4 Reliability
-- Graceful error handling:  
-  - onerror in FileReader logs or displays “Could not read file.”  
-- State consistency after errors or removals.  
-- Component remains functional after recoverable errors.
 
----
+**REQ-NF011**: The drag-and-drop functionality must work consistently across Chrome, Firefox, Safari, and Edge browsers.
+
+**REQ-NF012**: Error handling must gracefully manage failed uploads and provide user feedback.
+
+**REQ-NF013**: The interface must recover gracefully from network interruptions during upload.
 
 ## 4. User Stories
 
-1. As an **end user**, I want to drag one or more images onto the drop zone so that I can upload them without navigating file dialogs.  
-2. As an **end user**, I want to click the drop zone to open the file dialog so that I can select files the traditional way.  
-3. As an **end user**, I want to see thumbnail previews of uploaded images so that I can verify I selected the correct files.  
-4. As an **end user**, I want to remove an image by clicking its “X” so that I can discard unwanted files before submission.  
-5. As an **end user**, I want to receive a warning if I try to upload a duplicate image so that I don’t accidentally upload the same file twice.  
-6. As a **power user**, I want the component to reject non-image files immediately so that I’m not confused by unsupported formats.  
-7. As an **accessibility user**, I want keyboard support for file selection and removal so that I can use the component without a mouse.  
-8. As a **developer**, I want console logs of file sizes and dimensions so that I can debug client-side image processing.  
-9. As a **product owner**, I want the component to handle up to 20 images smoothly so that high-volume users aren’t frustrated.  
-10. As a **tester**, I want clear error messages when file reading fails so that I can identify and report issues.
+**US001**: As a content manager, I want to drag files anywhere within a large drop zone so that I don't accidentally miss the target area when uploading multiple images.
 
----
+**US002**: As a user with motor difficulties, I want a generous drop area so that I can easily drag files without precise positioning.
+
+**US003**: As a mobile user, I want the drop area to be appropriately sized for touch interactions so that I can easily upload files on my device.
+
+**US004**: As a power user, I want to see clear visual feedback when dragging files so that I know exactly when I'm in the correct drop zone.
+
+**US005**: As a designer, I want the expanded drop area to maintain the existing purple theme and animations so that the interface remains visually cohesive.
+
+**US006**: As a user, I want to be able to drag multiple files at once into the expanded area so that I can efficiently upload batches of images.
+
+**US007**: As an administrator, I want the drag area to work consistently across all supported browsers so that all users have the same experience.
 
 ## 5. Constraints and Assumptions
 
 ### 5.1 Technical Constraints
-- Must use **Angular** (v14+) standalone component architecture.  
-- UI built with **Angular Material** (`MatIconModule`, `MatButtonModule`).  
-- No backend integration in this scope (pure front-end).  
-- Browser API: `DragEvent`, `FileReader`, `HTMLInputElement`.
+
+- Must maintain compatibility with existing Angular/CSS framework
+- Cannot modify the underlying drag-and-drop JavaScript functionality
+- Must preserve existing Bootstrap grid system integration
+- CSS modifications only - no HTML structure changes allowed
 
 ### 5.2 Business Constraints
-- Development timeline: 2 sprints (4 weeks).  
-- Budget: 80 engineering hours.  
-- Team: 1 FE developer, 1 QA engineer.
+
+- Solution must be implemented within current sprint cycle
+- No additional third-party libraries can be introduced
+- Must maintain existing brand color scheme (#ff11f2 purple theme)
+- Cannot break existing functionality during implementation
 
 ### 5.3 Assumptions
-- Users have modern browsers with ES2015+ and FileReader support.  
-- Maximum file size default is 5 MB (configurable).  
-- No requirement for mobile-only drag events (tap-to-select only on mobile).
 
----
+- Current browser support requirements remain unchanged
+- Existing file upload backend can handle the modified interface
+- Users are familiar with drag-and-drop interactions
+- The current responsive breakpoints (768px) are appropriate
+- Existing accessibility features are sufficient and should be preserved
 
 ## 6. Acceptance Criteria
 
-- [ ] Drop zone highlights on drag over and removes highlight on drag leave.  
-- [ ] Dropping valid image files adds thumbnails to the preview grid.  
-- [ ] Clicking the drop zone opens the file picker.  
-- [ ] Non-image files are rejected and user is notified (console or UI).  
-- [ ] Duplicate image names are prevented; user is notified.  
-- [ ] Each thumbnail displays an “X” icon; clicking it removes the image.  
-- [ ] Uploaded image count updates correctly after add/remove operations.  
-- [ ] FileReader failures are caught and surface an error message.  
-- [ ] Component works across Chrome, Firefox, Edge, Safari (latest versions).  
-- [ ] Keyboard users can focus the drop zone and remove buttons and activate via Enter/Space.
+### Primary Acceptance Criteria
 
----
+| Requirement | Success Criteria | Verification Method |
+|-------------|------------------|-------------------|
+| Expanded Drop Area | Drop area height increased to minimum 400px on desktop | Visual inspection and CSS measurement |
+| Visual Continuity | All existing animations and color schemes preserved | Cross-browser testing |
+| Responsive Design | Drop area scales appropriately on mobile (min 250px height) | Device testing across breakpoints |
+| Drag Functionality | Files can be dropped anywhere within expanded area | Manual testing with various file types |
+| Performance | No increase in render time or animation lag | Performance profiling tools |
 
-## 7. Out of Scope
-- Server-side upload or persistence.  
-- Drag-and-drop support for entire folders.  
-- Non-image file handling (e.g., PDF, DOCX).  
-- Image editing (crop, rotate, resize).  
-- Internationalization/localization.  
-- Legacy browser support (IE11).  
+### Technical Acceptance Criteria
 
----
+- CSS validates without errors
+- No console errors introduced by changes
+- Existing unit tests continue to pass
+- Cross-browser compatibility maintained
+- Accessibility standards not compromised
 
-**Prioritization (MoSCoW)**
+## 7. Implementation Specifications
 
-| Requirement                              | Priority |
-|------------------------------------------|----------|
-| Drag & drop upload                       | Must     |
-| Click-to-upload                          | Must     |
-| Image preview                            | Must     |
-| Remove image                             | Must     |
-| File type validation                     | Must     |
-| Duplicate prevention                     | Should   |
-| File size validation                     | Could    |
-| Keyboard accessibility                   | Should   |
-| Performance up to 20 images              | Could    |
-| Cross-browser compatibility (modern only)| Must     |
+### 7.1 CSS Modifications Required
 
-This specification provides a clear, testable, and prioritized guide for implementing the Angular image upload component. Ensure each acceptance criterion is validated during QA and demos.
+**Primary Changes**:
+- Increase `.drop-area` minimum height from current value to 400px
+- Adjust responsive breakpoint styles for mobile devices
+- Ensure proper padding and margin calculations
+
+**Responsive Adjustments**:
+```css
+.drop-area {
+  min-height: 400px; /* Increased from current */
+  padding: 2rem; /* Ensure adequate internal spacing */
+}
+
+@media (max-width: 768px) {
+  .drop-area {
+    min-height: 300px !important; /* Increased from 250px */
+    padding: 1.5rem;
+  }
+}
+```
+
+### 7.2 Testing Requirements
+
+- Test drag-and-drop functionality across expanded area
+- Verify visual feedback animations work correctly
+- Confirm responsive behavior on various screen sizes
+- Validate accessibility with screen readers
+- Performance test with multiple simultaneous uploads
+
+## 8. Out of Scope
+
+The following items are explicitly excluded from this requirements specification:
+
+- Modifications to JavaScript drag-and-drop event handlers
+- Changes to backend file upload processing
+- Addition of new file type support
+- Modifications to image preview functionality
+- Changes to the categorization or tagging system
+- Implementation of new upload progress indicators
+- Modifications to the existing color scheme or branding
+- Changes to the card layout or image thumbnail sizes
+- Addition of new accessibility features beyond maintaining current standards
+- Integration with cloud storage services
+- Implementation of image compression or optimization features
+
+## 9. Success Metrics
+
+**Immediate Success Indicators**:
+- Zero user complaints about truncated drag areas
+- Successful file uploads from any position within the expanded zone
+- Maintained visual consistency with existing design
+- No performance regression in upload operations
+
+**Long-term Success Indicators**:
+- Increased user satisfaction scores for upload experience
+- Reduced support tickets related to upload difficulties
+- Maintained or improved upload completion rates
+- Consistent functionality across all supported browsers and devices

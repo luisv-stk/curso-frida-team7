@@ -74,4 +74,33 @@
       </subtask>
     </subtasks>
   </task>
+  <task>
+    <task_name>Enhance image management functionality</task_name>
+    <subtasks>
+      <subtask>
+        <id>11</id>
+        <name>Add image categorization support</name>
+        <description>Extend the component to allow users to assign categories to uploaded images, integrating with the existing CategoryImage structure.</description>
+        <completed>true</completed>
+      </subtask>
+      <subtask>
+        <id>12</id>
+        <name>Implement bulk image operations</name>
+        <description>Add functionality to handle multiple image uploads simultaneously and provide batch operations like selecting all, deleting all, or categorizing multiple images at once.</description>
+        <completed>true</completed>
+      </subtask>
+      <subtask>
+        <id>13</id>
+        <name>Add drag and drop visual feedback improvements</name>
+        <description>Enhance the drop area with better visual indicators during drag operations, including highlighting, animations, and clear feedback messages.</description>
+        <completed>true</completed>
+      </subtask>
+      <subtask>
+        <id>14</id>
+        <name>Expand drop area coverage and dimensions</name>
+        <description>Modify the CSS styles to increase the active drop area size, making it easier for users to drop files without precise targeting, and ensure the visual boundaries match the functional drop zone.</description>
+        <completed>true</completed>
+      </subtask>
+    </subtasks>
+  </task>
 </tasks>

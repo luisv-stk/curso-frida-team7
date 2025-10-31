@@ -1,6 +1,7 @@
 FRIDA
 
 Inconvenientes:
+
 - lentitud en la respuesta en modo agente para crear código
 - no estar integrado con Visual Studio 2022
 

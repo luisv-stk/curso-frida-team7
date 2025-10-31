@@ -6,4 +6,5 @@ Inconvenientes:
 - no estar integrado con Visual Studio 2022
 
 Ventajas:
+
 - respuestas de acorde a lo pedido, generación de código según necesidades
